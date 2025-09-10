@@ -5,9 +5,9 @@
  * @returns The processed content with page references converted to markdown links
  */
 export function processPageReferences(content: string): string {
-  return content.replace(/\(\s*page\s+(\d+(?:\s*,\s*page\s+\d+)*)\s*\)/g, (match, pageList) => {
+  return content.replace(/\(\s*page\s+(\d+(?:\s*,\s*page\s+\d+)*)\s*\)/g, (match, pageList: string) => {
     const pages = pageList.split(/\s*,\s*page\s+/);
-    const links = pages.map(pageNum => `[page ${pageNum.trim()}](#page-${pageNum.trim()})`);
+    const links = pages.map((pageNum: string) => `[page ${pageNum.trim()}](#page-${pageNum.trim()})`);
     return `(${links.join(', ')})`;
   });
 }
