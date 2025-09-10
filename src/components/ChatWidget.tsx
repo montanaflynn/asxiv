@@ -53,7 +53,8 @@ const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
 const SuggestedQuestions: React.FC<{ 
   questions: SuggestedQuestion[]; 
   onQuestionClick: (question: string) => void;
-}> = ({ questions, onQuestionClick }) => {
+  isLoading: boolean;
+}> = ({ questions, onQuestionClick, isLoading }) => {
   if (!questions || questions.length === 0) return null;
 
   return (
@@ -66,6 +67,7 @@ const SuggestedQuestions: React.FC<{
             className={styles.questionButton}
             onClick={() => onQuestionClick(question.text)}
             title={question.description}
+            disabled={isLoading}
           >
             {question.text}
           </button>
@@ -115,7 +117,13 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
   };
 
   const handleSuggestedQuestionClick = async (question: string) => {
-    if (isLoading || !currentArxivId) return;
+    // Prevent duplicate calls and ensure we have required data
+    if (isLoading || !currentArxivId || !question.trim()) {
+      return;
+    }
+
+    // Clear any existing text in the input field to prevent confusion
+    setMessage('');
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -492,6 +500,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
                   <SuggestedQuestions 
                     questions={msg.structured.suggestedQuestions}
                     onQuestionClick={handleSuggestedQuestionClick}
+                    isLoading={isLoading}
                   />
                 )}
               </>

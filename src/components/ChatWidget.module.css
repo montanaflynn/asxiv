@@ -396,6 +396,19 @@
   background: rgba(137, 19, 27, 0.15);
 }
 
+.questionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(137, 19, 27, 0.05);
+  border-color: rgba(137, 19, 27, 0.1);
+}
+
+.questionButton:disabled:hover {
+  transform: none;
+  background: rgba(137, 19, 27, 0.05);
+  border-color: rgba(137, 19, 27, 0.1);
+}
+
 @media (max-width: 1024px) and (min-width: 769px) {
   .container {
     width: 350px;
