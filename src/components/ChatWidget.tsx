@@ -8,11 +8,18 @@ import { Message, StructuredChatResponse, ChatApiResponse, SuggestedQuestion } f
 // Component to render markdown with clickable page references
 const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
   const handlePageClick = (pageNum: string) => {
+    console.log('Page link clicked:', pageNum);
     if (typeof window !== 'undefined') {
       const pdfFrame = document.getElementById('pdfFrame') as HTMLIFrameElement;
+      console.log('PDF frame found:', pdfFrame);
+      console.log('PDF frame src:', pdfFrame?.src);
       if (pdfFrame && pdfFrame.src) {
         const baseUrl = pdfFrame.src.split('#')[0];
-        pdfFrame.src = `${baseUrl}#page=${pageNum}`;
+        const newUrl = `${baseUrl}#page=${pageNum}`;
+        console.log('Navigating to:', newUrl);
+        pdfFrame.src = newUrl;
+      } else {
+        console.error('PDF frame not found or has no src');
       }
     }
   };
@@ -26,7 +33,7 @@ const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
     <ReactMarkdown 
       remarkPlugins={[remarkGfm]}
       components={{
-        a: ({ href, children, ...props }) => {
+        a: ({ href, children, node, ...props }) => {
           // Check if this is a page reference link
           const pageMatch = href?.match(/^#page-(\d+)$/);
           if (pageMatch) {
