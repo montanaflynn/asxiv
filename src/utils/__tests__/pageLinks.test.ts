@@ -59,20 +59,21 @@ describe('processPageReferences', () => {
 });
 
 describe('handlePageNavigation', () => {
-  // Mock DOM environment
-  const mockIframe = {
-    src: 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762',
-    id: 'pdfFrame'
-  };
+  let mockGetElementById: jest.Mock;
+  let consoleSpy: jest.SpyInstance;
+  let mockDocument: Document;
 
   beforeEach(() => {
-    // Mock document.getElementById
-    global.document = {
-      getElementById: jest.fn(() => mockIframe)
+    // Create fresh mocks for each test
+    mockGetElementById = jest.fn();
+    
+    // Create mock document
+    mockDocument = {
+      getElementById: mockGetElementById
     } as any;
 
     // Mock console.error to avoid noise in test output
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -80,33 +81,42 @@ describe('handlePageNavigation', () => {
   });
 
   it('should update PDF frame src with page anchor', () => {
-    handlePageNavigation('5');
+    const mockIframe = {
+      src: 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762'
+    };
+    mockGetElementById.mockReturnValue(mockIframe);
+    
+    handlePageNavigation('5', mockDocument);
     
     expect(mockIframe.src).toBe('https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762#page=5');
+    expect(mockGetElementById).toHaveBeenCalledWith('pdfFrame');
   });
 
   it('should handle existing page anchor in URL', () => {
-    mockIframe.src = 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762#page=3';
+    const mockIframe = {
+      src: 'https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762#page=3'
+    };
+    mockGetElementById.mockReturnValue(mockIframe);
     
-    handlePageNavigation('7');
+    handlePageNavigation('7', mockDocument);
     
     expect(mockIframe.src).toBe('https://mozilla.github.io/pdf.js/web/viewer.html?file=https://arxiv.org/pdf/1706.03762#page=7');
   });
 
   it('should handle case when PDF frame is not found', () => {
-    (global.document.getElementById as jest.Mock).mockReturnValue(null);
+    mockGetElementById.mockReturnValue(null);
     
     // Should not throw error
-    expect(() => handlePageNavigation('5')).not.toThrow();
-    expect(console.error).toHaveBeenCalledWith('PDF frame not found or has no src');
+    expect(() => handlePageNavigation('5', mockDocument)).not.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith('PDF frame not found or has no src');
   });
 
   it('should handle case when PDF frame has no src', () => {
-    const mockIframeNoSrc = { ...mockIframe, src: '' };
-    (global.document.getElementById as jest.Mock).mockReturnValue(mockIframeNoSrc);
+    const mockIframe = { src: '' };
+    mockGetElementById.mockReturnValue(mockIframe);
     
     // Should not throw error
-    expect(() => handlePageNavigation('5')).not.toThrow();
-    expect(console.error).toHaveBeenCalledWith('PDF frame not found or has no src');
+    expect(() => handlePageNavigation('5', mockDocument)).not.toThrow();
+    expect(consoleSpy).toHaveBeenCalledWith('PDF frame not found or has no src');
   });
 });

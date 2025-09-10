@@ -15,11 +15,13 @@ export function processPageReferences(content: string): string {
 /**
  * Handles clicking on a page reference link by navigating the PDF viewer
  * @param pageNum - The page number to navigate to
+ * @param doc - Optional document object for testing
  */
-export function handlePageNavigation(pageNum: string): void {
-  if (typeof window === 'undefined') return;
+export function handlePageNavigation(pageNum: string, doc?: Document): void {
+  if (typeof window === 'undefined' && !doc) return;
   
-  const pdfFrame = document.getElementById('pdfFrame') as HTMLIFrameElement;
+  const documentObj = doc || document;
+  const pdfFrame = documentObj.getElementById('pdfFrame') as HTMLIFrameElement;
   if (pdfFrame && pdfFrame.src) {
     const baseUrl = pdfFrame.src.split('#')[0];
     const newUrl = `${baseUrl}#page=${pageNum}`;
