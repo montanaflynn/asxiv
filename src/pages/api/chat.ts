@@ -174,7 +174,7 @@ Set responseType to "welcome".`;
 Answer this question: ${lastUserMessage.content}
 
 Guidelines for content field:
-- CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
+- CRITICAL: Always format page references using EXACTLY this format: (page X) for single pages or (page X, page Y) for multiple pages. Examples: "(page 1)", "(page 2, page 6)". NEVER use formats like "page 1,3" or "page 1-3"
 - CRITICAL: ONLY state information you can actually find in the PDF content
 - NEVER make assumptions or educated guesses about information not explicitly stated
 - If you cannot find specific information, clearly state "I cannot find this information in the paper"
@@ -201,7 +201,7 @@ Set responseType to "answer".`;
 ${conversationHistory}Current question: ${lastUserMessage.content}
 
 Guidelines for content field:
-- CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
+- CRITICAL: Always format page references using EXACTLY this format: (page X) for single pages or (page X, page Y) for multiple pages. Examples: "(page 1)", "(page 2, page 6)". NEVER use formats like "page 1,3" or "page 1-3"
 - CRITICAL: ONLY state information you can actually find in the PDF
 - NEVER make assumptions or educated guesses about information not explicitly stated
 - If you cannot find specific information, clearly state "I cannot find this information in the paper"
