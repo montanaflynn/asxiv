@@ -244,7 +244,7 @@ Respond ONLY with valid JSON, no other text.`;
 
     // Return both formats for backwards compatibility
     const apiResponse: ChatApiResponse = {
-      response: text, // Keep original for backwards compatibility
+      response: structuredResponse ? structuredResponse.content : text, // Use structured content if available
       structured: structuredResponse || undefined
     };
 
