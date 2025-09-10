@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { GoogleGenAI, createUserContent, createPartFromUri } from '@google/genai';
+import { StructuredChatResponse, ChatApiResponse } from '../../types/chat';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -123,34 +124,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let promptText;
       
       if (isWelcomeRequest) {
-        promptText = `You are an AI assistant for arXiv paper ${arxivId}. After analyzing the PDF, create a brief welcome message with:
+        promptText = `You are an AI assistant for arXiv paper ${arxivId}. After analyzing the PDF, respond with a JSON object in this exact format:
 
-1. One sentence summary of what this paper is about
-2. 4-5 short, specific questions users can ask (each question should be one line)
+{
+  "content": "Brief welcome message with one sentence summary of the paper",
+  "suggestedQuestions": [
+    {"text": "What is the main contribution of this paper?"},
+    {"text": "How does this approach compare to existing methods?"},
+    {"text": "What are the key results?"},
+    {"text": "What datasets were used in the evaluation?"},
+    {"text": "What are the limitations mentioned?"}
+  ],
+  "responseType": "welcome"
+}
 
-Keep it very concise. Use markdown formatting.
-
-Create a welcome message.`;
+Replace the example questions with 4-5 specific questions relevant to THIS paper. Use markdown in content field. Respond ONLY with valid JSON, no other text.`;
       } else {
         promptText = `You are an AI assistant helping users understand and analyze this arXiv research paper (ID: ${arxivId}). You are part of asXiv, a tool created by Montana Flynn.
 
-You should:
-1. Analyze the PDF content to understand the paper's methodology, findings, and conclusions
-2. Answer questions about specific sections, figures, tables, or concepts
-3. Explain technical terms and concepts in accessible language
-4. Provide insights about the research's significance and implications
-5. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number. Examples: "The authors are Vaswani et al. (page 1)", "The architecture is described (page 3)"
-6. For author information, if all authors are listed on the same page, use one reference for the group
-7. CRITICAL: ONLY state information that you can actually find in the provided PDF content
-8. NEVER make assumptions, inferences, or educated guesses about information not explicitly stated in the paper
-9. If you cannot find specific information (dates, numbers, claims, etc.) in the paper, clearly state "I cannot find this information in the paper"
-10. Do NOT infer submission dates from arXiv IDs or make up dates - only cite dates actually written in the paper
-11. Format your responses using Markdown for better readability
-12. Never make up or hallucinate page references - only cite pages where you actually found the information
-13. IMPORTANT: Do NOT start your responses with phrases like "Based on my analysis of arXiv paper..." or "According to the paper...". Just answer directly and naturally.
-14. If anyone asks who created asXiv or this tool, mention it was created by Montana Flynn. Note: arXiv is the academic paper repository, asXiv is the AI tool you are part of.
+Respond with a JSON object in this exact format:
+{
+  "content": "Your detailed answer in markdown format",
+  "suggestedQuestions": [
+    {"text": "Follow-up question 1 based on this answer"},
+    {"text": "Follow-up question 2 based on this answer"},
+    {"text": "Follow-up question 3 based on this answer"}
+  ],
+  "responseType": "answer"
+}
 
-Answer this question: ${lastUserMessage.content}`;
+Guidelines:
+1. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number in your content
+2. CRITICAL: ONLY state information you can actually find in the PDF content
+3. NEVER make assumptions or educated guesses about information not explicitly stated
+4. If you cannot find specific information, clearly state "I cannot find this information in the paper"
+5. Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
+6. Never make up or hallucinate page references - only cite pages where you actually found the information
+7. Do NOT start responses with "Based on my analysis" or "According to the paper"
+8. Provide 2-4 contextually relevant suggested questions based on your answer and the current conversation
+9. Make suggested questions specific to this paper's content, not generic
+
+Answer this question: ${lastUserMessage.content}
+
+Respond ONLY with valid JSON, no other text.`;
       }
 
       contents = createUserContent([
@@ -165,7 +181,29 @@ Answer this question: ${lastUserMessage.content}`;
 
 ${conversationHistory}Current question: ${lastUserMessage.content}
 
-Answer directly and naturally using Markdown formatting. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number. Examples: "The authors are Smith et al. (page 1)", "The results show (page 7)". CRITICAL: ONLY state information you can actually find in the PDF - never make assumptions, inferences, or educated guesses. If you cannot find specific information, clearly state "I cannot find this information in the paper". Do NOT infer dates from arXiv IDs. For authors on the same page, use one reference. Never make up or hallucinate page numbers - only cite pages where you actually found the information. Do NOT start with phrases like "Based on my analysis" or "According to the paper". If anyone asks who created asXiv or this tool, mention it was created by Montana Flynn. Note: arXiv is the academic paper repository, asXiv is the AI tool you are part of.`;
+Respond with a JSON object in this exact format:
+{
+  "content": "Your detailed answer in markdown format",
+  "suggestedQuestions": [
+    {"text": "Follow-up question 1 based on this conversation"},
+    {"text": "Follow-up question 2 based on this conversation"},
+    {"text": "Follow-up question 3 based on this conversation"}
+  ],
+  "responseType": "answer"
+}
+
+Guidelines:
+1. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
+2. CRITICAL: ONLY state information you can actually find in the PDF
+3. NEVER make assumptions or educated guesses about information not explicitly stated
+4. If you cannot find specific information, clearly state "I cannot find this information in the paper"
+5. Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
+6. Never make up or hallucinate page numbers - only cite pages where you actually found the information
+7. Do NOT start responses with "Based on my analysis" or "According to the paper"
+8. Provide 2-4 contextually relevant suggested questions based on our conversation history
+9. Make suggested questions specific to this paper and our current discussion thread
+
+Respond ONLY with valid JSON, no other text.`;
       
       contents = createUserContent([promptText]);
       console.log('Follow-up message - using conversation context, no PDF');
@@ -195,8 +233,22 @@ Answer directly and naturally using Markdown formatting. CRITICAL: Always format
     }
     console.log('Text extracted successfully, length:', text.length);
 
-    // Return as JSON response 
-    res.status(200).json({ response: text });
+    // Try to parse the response as structured JSON
+    let structuredResponse: StructuredChatResponse | null = null;
+    try {
+      structuredResponse = JSON.parse(text.trim());
+      console.log('Successfully parsed structured response');
+    } catch (parseError) {
+      console.log('Failed to parse as JSON, treating as plain text response');
+    }
+
+    // Return both formats for backwards compatibility
+    const apiResponse: ChatApiResponse = {
+      response: text, // Keep original for backwards compatibility
+      structured: structuredResponse || undefined
+    };
+
+    res.status(200).json(apiResponse);
 
   } catch (error) {
     console.error('Chat API error:', error);

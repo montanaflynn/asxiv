@@ -352,6 +352,50 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Suggested questions styles */
+.suggestedQuestions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.suggestedTitle {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--arxiv-red, #89131b);
+}
+
+.questionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.questionButton {
+  background: rgba(137, 19, 27, 0.05);
+  border: 1px solid rgba(137, 19, 27, 0.2);
+  color: var(--arxiv-red, #89131b);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  text-align: left;
+  transition: all 0.2s ease;
+  line-height: 1.3;
+}
+
+.questionButton:hover {
+  background: rgba(137, 19, 27, 0.1);
+  border-color: rgba(137, 19, 27, 0.3);
+  transform: translateY(-1px);
+}
+
+.questionButton:active {
+  transform: translateY(0);
+  background: rgba(137, 19, 27, 0.15);
+}
+
 @media (max-width: 1024px) and (min-width: 769px) {
   .container {
     width: 350px;

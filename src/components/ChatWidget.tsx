@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './ChatWidget.module.css';
+import { Message, StructuredChatResponse, ChatApiResponse, SuggestedQuestion } from '../types/chat';
 
 // Component to render markdown with clickable page references
 const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
@@ -54,13 +55,31 @@ const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
 };
 
 
-interface Message {
-  id: string;
-  text: string;
-  isBot: boolean;
-  timestamp: Date;
-  isError?: boolean;
-}
+// Component to render suggested questions
+const SuggestedQuestions: React.FC<{ 
+  questions: SuggestedQuestion[]; 
+  onQuestionClick: (question: string) => void;
+}> = ({ questions, onQuestionClick }) => {
+  if (!questions || questions.length === 0) return null;
+
+  return (
+    <div className={styles.suggestedQuestions}>
+      <h4 className={styles.suggestedTitle}>Suggested questions:</h4>
+      <div className={styles.questionsList}>
+        {questions.map((question, index) => (
+          <button
+            key={index}
+            className={styles.questionButton}
+            onClick={() => onQuestionClick(question.text)}
+            title={question.description}
+          >
+            {question.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 interface ChatWidgetProps {
   arxivId?: string;
@@ -101,6 +120,15 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
     }
   };
 
+  const handleSuggestedQuestionClick = (question: string) => {
+    setMessage(question);
+    // Small delay to ensure state is updated, then submit
+    setTimeout(() => {
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      handleSubmit(fakeEvent);
+    }, 10);
+  };
+
   useEffect(() => {
     // Only scroll when we have both user message and bot response
     if (messages.length >= 2) {
@@ -132,15 +160,19 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
         throw new Error('Failed to generate welcome message');
       }
 
-      const data = await response.json();
-      if (data.response) {
-        setMessages([{
-          id: 'welcome',
-          text: data.response,
-          isBot: true,
-          timestamp: new Date()
-        }]);
-      }
+      const data: ChatApiResponse = await response.json();
+      
+      // Use structured response if available, fallback to plain text
+      const messageText = data.structured?.content || data.response || '';
+      const structuredData = data.structured;
+      
+      setMessages([{
+        id: 'welcome',
+        text: messageText,
+        isBot: true,
+        timestamp: new Date(),
+        structured: structuredData
+      }]);
     } catch (error: unknown) {
       console.error('Welcome message error:', error);
       // Fallback to simple welcome message
@@ -242,16 +274,21 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
       }
 
       // Handle JSON response from Gemini
-      const data = await response.json();
-      if (!data.response) {
+      const data: ChatApiResponse = await response.json();
+      if (!data.response && !data.structured) {
         throw new Error('No response from AI');
       }
 
+      // Use structured response if available, fallback to plain text
+      const messageText = data.structured?.content || data.response || '';
+      const structuredData = data.structured;
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response,
+        text: messageText,
         isBot: true,
-        timestamp: new Date()
+        timestamp: new Date(),
+        structured: structuredData
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -347,7 +384,15 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
             role={msg.isBot ? 'assistant' : 'user'}
           >
             {msg.isBot ? (
-              <MarkdownWithPageLinks content={msg.text} />
+              <>
+                <MarkdownWithPageLinks content={msg.text} />
+                {msg.structured?.suggestedQuestions && (
+                  <SuggestedQuestions 
+                    questions={msg.structured.suggestedQuestions}
+                    onQuestionClick={handleSuggestedQuestionClick}
+                  />
+                )}
+              </>
             ) : (
               msg.text
             )}
