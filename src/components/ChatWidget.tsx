@@ -120,13 +120,121 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ arxivId }) => {
     }
   };
 
-  const handleSuggestedQuestionClick = (question: string) => {
-    setMessage(question);
-    // Small delay to ensure state is updated, then submit
-    setTimeout(() => {
-      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-      handleSubmit(fakeEvent);
-    }, 10);
+  const handleSuggestedQuestionClick = async (question: string) => {
+    if (isLoading || !currentArxivId) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: question,
+      isBot: false,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    setError(null);
+
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    try {
+      // Prepare messages for API (exclude timestamps and IDs)
+      const apiMessages = messages
+        .filter(msg => !msg.isBot || msg.id !== 'welcome') // Exclude welcome message
+        .concat(userMessage)
+        .map(msg => ({
+          role: msg.isBot ? 'assistant' : 'user' as const,
+          content: msg.text
+        }));
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          arxivId: currentArxivId
+        }),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        // Extract detailed error information
+        let errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
+        
+        // Try to parse JSON error structures (e.g., from Gemini API)
+        if (typeof errorMessage === 'string' && errorMessage.includes('{')) {
+          try {
+            // Extract everything after the first hyphen and space, then parse JSON
+            const parts = errorMessage.split(' - ');
+            if (parts.length > 1) {
+              const jsonPart = parts.slice(1).join(' - '); // In case there are multiple hyphens
+              const jsonError = JSON.parse(jsonPart);
+              if (jsonError.error && jsonError.error.message) {
+                errorMessage = `${parts[0]} - ${jsonError.error.message}`;
+              }
+            }
+          } catch {
+            // If JSON parsing fails, keep the original message
+          }
+        }
+        
+        // If there are additional error details, include them
+        if (errorData.details && !errorMessage.includes(errorData.details)) {
+          errorMessage += ` - ${errorData.details}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Handle JSON response from Gemini
+      const data: ChatApiResponse = await response.json();
+      if (!data.response && !data.structured) {
+        throw new Error('No response from AI');
+      }
+
+      // Use structured response if available, fallback to plain text
+      const messageText = data.structured?.content || data.response || '';
+      const structuredData = data.structured;
+
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: messageText,
+        isBot: true,
+        timestamp: new Date(),
+        structured: structuredData
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return; // Request was cancelled, don't show error
+      }
+      
+      console.error('Chat error:', error);
+      
+      // Add error message as a bot message in the chat
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: error instanceof Error ? error.message : 'Failed to get response. Please try again.',
+        isBot: true,
+        timestamp: new Date(),
+        isError: true
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setError(null); // Clear any existing error state
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
   };
 
   useEffect(() => {
