@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { GoogleGenAI, createUserContent, createPartFromUri } from '@google/genai';
+import { GoogleGenAI, createUserContent, createPartFromUri, Type } from '@google/genai';
 import { StructuredChatResponse, ChatApiResponse } from '../../types/chat';
 
 interface ChatMessage {
@@ -13,6 +13,43 @@ interface ChatRequest {
 }
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
+// Define the JSON schema for structured responses
+const structuredResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    content: {
+      type: Type.STRING,
+      description: 'Main response content in markdown format'
+    },
+    suggestedQuestions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          text: {
+            type: Type.STRING,
+            description: 'The suggested question text'
+          },
+          description: {
+            type: Type.STRING,
+            description: 'Optional description of what this question explores'
+          }
+        },
+        required: ['text'],
+        propertyOrdering: ['text', 'description']
+      },
+      description: 'Context-aware suggested questions based on current conversation'
+    },
+    responseType: {
+      type: Type.STRING,
+      enum: ['welcome', 'answer', 'clarification', 'error'],
+      description: 'Type of response for UI handling'
+    }
+  },
+  required: ['content', 'responseType'],
+  propertyOrdering: ['content', 'suggestedQuestions', 'responseType']
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -124,49 +161,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let promptText;
       
       if (isWelcomeRequest) {
-        promptText = `You are an AI assistant for arXiv paper ${arxivId}. After analyzing the PDF, respond with a JSON object in this exact format:
+        promptText = `You are an AI assistant for arXiv paper ${arxivId}. After analyzing the PDF, create a brief welcome message.
 
-{
-  "content": "Brief welcome message with one sentence summary of the paper",
-  "suggestedQuestions": [
-    {"text": "What is the main contribution of this paper?"},
-    {"text": "How does this approach compare to existing methods?"},
-    {"text": "What are the key results?"},
-    {"text": "What datasets were used in the evaluation?"},
-    {"text": "What are the limitations mentioned?"}
-  ],
-  "responseType": "welcome"
-}
+For the content field: Provide a brief welcome message with one sentence summary of what this paper is about.
 
-Replace the example questions with 4-5 specific questions relevant to THIS paper. Use markdown in content field. Respond ONLY with valid JSON, no other text.`;
+For suggestedQuestions: Create 4-5 specific questions that users can ask about THIS particular paper. Make them specific to the paper's content, methodology, and findings - not generic questions.
+
+Set responseType to "welcome".`;
       } else {
-        promptText = `You are an AI assistant helping users understand and analyze this arXiv research paper (ID: ${arxivId}). You are part of asXiv, a tool created by Montana Flynn.
-
-Respond with a JSON object in this exact format:
-{
-  "content": "Your detailed answer in markdown format",
-  "suggestedQuestions": [
-    {"text": "Follow-up question 1 based on this answer"},
-    {"text": "Follow-up question 2 based on this answer"},
-    {"text": "Follow-up question 3 based on this answer"}
-  ],
-  "responseType": "answer"
-}
-
-Guidelines:
-1. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number in your content
-2. CRITICAL: ONLY state information you can actually find in the PDF content
-3. NEVER make assumptions or educated guesses about information not explicitly stated
-4. If you cannot find specific information, clearly state "I cannot find this information in the paper"
-5. Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
-6. Never make up or hallucinate page references - only cite pages where you actually found the information
-7. Do NOT start responses with "Based on my analysis" or "According to the paper"
-8. Provide 2-4 contextually relevant suggested questions based on your answer and the current conversation
-9. Make suggested questions specific to this paper's content, not generic
+        promptText = `You are an AI assistant helping users understand and analyze arXiv paper ${arxivId}. You are part of asXiv, a tool created by Montana Flynn.
 
 Answer this question: ${lastUserMessage.content}
 
-Respond ONLY with valid JSON, no other text.`;
+Guidelines for content field:
+- CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
+- CRITICAL: ONLY state information you can actually find in the PDF content
+- NEVER make assumptions or educated guesses about information not explicitly stated
+- If you cannot find specific information, clearly state "I cannot find this information in the paper"
+- Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
+- Never make up or hallucinate page references - only cite pages where you actually found the information
+- Do NOT start responses with "Based on my analysis" or "According to the paper"
+- Use markdown formatting for better readability
+
+For suggestedQuestions: Provide 2-4 contextually relevant follow-up questions based on your answer and the current conversation. Make them specific to this paper's content, not generic.
+
+Set responseType to "answer".`;
       }
 
       contents = createUserContent([
@@ -181,29 +200,19 @@ Respond ONLY with valid JSON, no other text.`;
 
 ${conversationHistory}Current question: ${lastUserMessage.content}
 
-Respond with a JSON object in this exact format:
-{
-  "content": "Your detailed answer in markdown format",
-  "suggestedQuestions": [
-    {"text": "Follow-up question 1 based on this conversation"},
-    {"text": "Follow-up question 2 based on this conversation"},
-    {"text": "Follow-up question 3 based on this conversation"}
-  ],
-  "responseType": "answer"
-}
+Guidelines for content field:
+- CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
+- CRITICAL: ONLY state information you can actually find in the PDF
+- NEVER make assumptions or educated guesses about information not explicitly stated
+- If you cannot find specific information, clearly state "I cannot find this information in the paper"
+- Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
+- Never make up or hallucinate page numbers - only cite pages where you actually found the information
+- Do NOT start responses with "Based on my analysis" or "According to the paper"
+- Use markdown formatting for better readability
 
-Guidelines:
-1. CRITICAL: Always format page references using EXACTLY this format: (page X) where X is the page number
-2. CRITICAL: ONLY state information you can actually find in the PDF
-3. NEVER make assumptions or educated guesses about information not explicitly stated
-4. If you cannot find specific information, clearly state "I cannot find this information in the paper"
-5. Do NOT infer dates from arXiv IDs - only cite dates actually written in the paper
-6. Never make up or hallucinate page numbers - only cite pages where you actually found the information
-7. Do NOT start responses with "Based on my analysis" or "According to the paper"
-8. Provide 2-4 contextually relevant suggested questions based on our conversation history
-9. Make suggested questions specific to this paper and our current discussion thread
+For suggestedQuestions: Provide 2-4 contextually relevant suggested questions based on our conversation history. Make them specific to this paper and our current discussion thread.
 
-Respond ONLY with valid JSON, no other text.`;
+Set responseType to "answer".`;
       
       contents = createUserContent([promptText]);
       console.log('Follow-up message - using conversation context, no PDF');
@@ -223,7 +232,11 @@ Respond ONLY with valid JSON, no other text.`;
     console.log(`Using Gemini model: ${model}`);
     const result = await genAI.models.generateContent({
       model: model,
-      contents: [contents]
+      contents: [contents],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: structuredResponseSchema
+      }
     });
 
     console.log('Gemini API call completed, getting response...');
@@ -232,20 +245,22 @@ Respond ONLY with valid JSON, no other text.`;
       throw new Error('No text response received from Gemini API');
     }
     console.log('Text extracted successfully, length:', text.length);
+    console.log('Structured JSON response received from Gemini');
 
-    // Try to parse the response as structured JSON
-    let structuredResponse: StructuredChatResponse | null = null;
+    // Parse the guaranteed JSON response from Gemini's structured output
+    let structuredResponse: StructuredChatResponse;
     try {
       structuredResponse = JSON.parse(text.trim());
       console.log('Successfully parsed structured response');
     } catch (parseError) {
-      console.log('Failed to parse as JSON, treating as plain text response');
+      console.error('Unexpected: Failed to parse Gemini structured output as JSON:', parseError);
+      throw new Error('Invalid structured response from Gemini API');
     }
 
     // Return both formats for backwards compatibility
     const apiResponse: ChatApiResponse = {
-      response: structuredResponse ? structuredResponse.content : text, // Use structured content if available
-      structured: structuredResponse || undefined
+      response: structuredResponse.content, // Always use structured content now
+      structured: structuredResponse
     };
 
     res.status(200).json(apiResponse);
