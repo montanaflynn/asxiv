@@ -4,32 +4,17 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './ChatWidget.module.css';
 import { Message, StructuredChatResponse, ChatApiResponse, SuggestedQuestion } from '../types/chat';
+import { processPageReferences, handlePageNavigation } from '../utils/pageLinks';
 
 // Component to render markdown with clickable page references
 const MarkdownWithPageLinks: React.FC<{ content: string }> = ({ content }) => {
   const handlePageClick = (pageNum: string) => {
     console.log('Page link clicked:', pageNum);
-    if (typeof window !== 'undefined') {
-      const pdfFrame = document.getElementById('pdfFrame') as HTMLIFrameElement;
-      console.log('PDF frame found:', pdfFrame);
-      console.log('PDF frame src:', pdfFrame?.src);
-      if (pdfFrame && pdfFrame.src) {
-        const baseUrl = pdfFrame.src.split('#')[0];
-        const newUrl = `${baseUrl}#page=${pageNum}`;
-        console.log('Navigating to:', newUrl);
-        pdfFrame.src = newUrl;
-      } else {
-        console.error('PDF frame not found or has no src');
-      }
-    }
+    handlePageNavigation(pageNum);
   };
 
   // Convert (page N) and (page N, page M) formats to clickable links
-  const processedContent = content.replace(/\(page\s+(\d+(?:,\s*page\s+\d+)*)\)/g, (match, pageList) => {
-    const pages = pageList.split(/,\s*page\s+/);
-    const links = pages.map(pageNum => `[(page ${pageNum.trim()})](#page-${pageNum.trim()})`);
-    return `(${links.join(', ')})`;
-  });
+  const processedContent = processPageReferences(content);
   
   return (
     <ReactMarkdown 
