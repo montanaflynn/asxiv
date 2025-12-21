@@ -10,6 +10,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function getInitialTheme(): Theme {
+  // Always return 'light' for SSR to match server render
   if (typeof window === 'undefined') {
     return 'light';
   }
@@ -22,10 +23,19 @@ function getInitialTheme(): Theme {
 }
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
+  // Start with 'light' to match SSR, then update after mount
+  const [theme, setTheme] = useState<Theme>('light');
+  const [mounted, setMounted] = useState(false);
+
+  // Initialize theme after mount to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+    const initialTheme = getInitialTheme();
+    setTheme(initialTheme);
+  }, []);
 
   useEffect(() => {
-    if (typeof document === 'undefined') {
+    if (typeof document === 'undefined' || !mounted) {
       return;
     }
     const body = document.body;
@@ -35,10 +45,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       body.classList.remove('dark-mode');
     }
     window.localStorage.setItem('asxiv-theme', theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !mounted) {
       return;
     }
     const matcher = window.matchMedia('(prefers-color-scheme: dark)');
@@ -51,7 +61,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     }
     matcher.addListener(listener);
     return () => matcher.removeListener(listener);
-  }, []);
+  }, [mounted]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
